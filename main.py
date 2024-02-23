@@ -7,6 +7,7 @@ import random
 import time
 import csv
 import re 
+import json
 
 # Constants defining categories for message types and configurations for the API.
 CATEGORIES = ["Disrespect", "Dishonesty", "Negativity", "Hostility"]
@@ -24,7 +25,7 @@ class MessagePair(BaseModel):
         respectful (str): A respectful or neutral message.
         nondisrespectful (str): A corresponding disrespectful message.
     """
-    respectful: str
+    disrespectful: str
     nondisrespectful: str
 
 class CategorisedMessages(BaseModel):
@@ -35,6 +36,17 @@ class CategorisedMessages(BaseModel):
         messages (List[MessagePair]): A list of message pairs categorized by their tone.
     """
     messages: list[MessagePair]
+
+def strip_code_block(content):
+    pattern = r'^\s*```json\s*(.*?)\s*```\s*$'
+    match = re.match(pattern, content, re.DOTALL)
+    if match:
+        print("stripping code block")
+        # Extract the JSON content without the code block syntax
+        content = match.group(1)
+    else:
+        print("not stripping code block")
+    return content
 
 def generate_messages(client, num_messages: int, dest: str, batch_size: int, use_instructor: bool = False):
 
@@ -51,7 +63,7 @@ def generate_messages(client, num_messages: int, dest: str, batch_size: int, use
     total_generated = 0
     while total_generated < num_messages:
         category = random.choice(CATEGORIES)
-        prompt = f"Generate {batch_size} pairs of short instant messages, where each pair contains a non-disrespectful (respectful or neutral) message and a corresponding disrespectful message exemplifying '{category}'."
+        prompt = f'Generate {batch_size} pairs of short instant messages where each pair has a non-disrespectful (respectful or neutral) message and then a corresponding disrespectful message exemplifying "{category}", formatted in JSON with property names "nondisrespectful" and "disrespecful" accordingly.'
 
         if use_instructor:
             # When use_instructor is True, use the instructor response_model to preprocess the messages
@@ -69,19 +81,20 @@ def generate_messages(client, num_messages: int, dest: str, batch_size: int, use
                 temperature=0.0,
                 messages=[{"role": "user", "content": prompt}]
             )
-            print(response.json())
-            content = response.choices[0].message.content
+            #print(response.json())
+            content = strip_code_block(response.choices[0].message.content)
             # Splitting the content by double line breaks to separate each message pair
-            pairs = content.split('\n\n')
+            print("=== content: ")
+            print(content)
+            pairs = json.loads(content)
+            #print(json.dumps(pairs, indent=2))
+
             message_pairs = []
             for pair in pairs:
-                # Extracting respectful and disrespectful messages using regular expressions
-                matches = re.findall(r'Respectful: "(.*?)"\s*Disrespectful: "(.*?)"', pair, re.DOTALL)
-                if matches:
-                    for respectful, nondisrespectful in matches:
-                        message_pairs.append(MessagePair(respectful=respectful, nondisrespectful=nondisrespectful))
-
-
+                # Extract respectful and disrespectful messages directly from the dictionary
+                nondisrespectful = pair["nondisrespectful"]
+                disrespectful = pair["disrespectful"]
+                message_pairs.append(MessagePair(nondisrespectful=nondisrespectful, disrespectful=disrespectful))
 
         write_to_csv(dest, message_pairs, category)
         total_generated += len(message_pairs)
@@ -102,7 +115,7 @@ def write_to_csv(dest, message_pairs, category):
     mode = 'a' if file_exists else 'w'
     
     with open(dest, mode, newline='', encoding='utf-8') as csvfile:
-        fieldnames = ['class', 'respectful', 'nondisrespectful']
+        fieldnames = ['class', 'nondisrespectful', 'disrespectful']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         
         # Write the header only if the file did not exist previously.
@@ -110,7 +123,7 @@ def write_to_csv(dest, message_pairs, category):
             writer.writeheader()
         
         for pair in message_pairs:
-            writer.writerow({'class': category, 'respectful': pair.respectful, 'nondisrespectful': pair.nondisrespectful})
+            writer.writerow({'class': category, 'nondisrespectful': pair.nondisrespectful, 'disrespectful': pair.disrespectful})
 
 if __name__ == "__main__":
     # Command-line interface setup for the script.
