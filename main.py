@@ -6,41 +6,98 @@ import os
 import random
 import time
 import csv
+import re 
 
-# Constants
+# Constants defining categories for message types and configurations for the API.
 CATEGORIES = ["Disrespect", "Dishonesty", "Negativity", "Hostility"]
 LOCAL_API_URL = 'http://gruntus:11434/v1'
 LOCAL_API_KEY = 'ollama'
 LOCAL_MODEL = 'mistral:7b'
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
-OPENAI_MODEL = "gpt-3.5-turbo"
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")  # Fetch the OpenAI API key from environment variables.
+OPENAI_MODEL = "gpt-3.5-turbo"  # Model identifier for OpenAI's API.
 
 class MessagePair(BaseModel):
+    """
+    Represents a pair of messages, one being respectful and the other non-disrespectful.
+
+    Attributes:
+        respectful (str): A respectful or neutral message.
+        nondisrespectful (str): A corresponding disrespectful message.
+    """
     respectful: str
     nondisrespectful: str
 
 class CategorisedMessages(BaseModel):
+    """
+    Holds a list of MessagePair objects, each representing a pair of messages with varying respectfulness.
+
+    Attributes:
+        messages (List[MessagePair]): A list of message pairs categorized by their tone.
+    """
     messages: list[MessagePair]
 
-def generate_messages(client, num_messages:int, dest:str, batch_size:int):
+def generate_messages(client, num_messages: int, dest: str, batch_size: int, use_instructor: bool = False):
+
+    """
+    Generates message pairs and writes them to a CSV file.
+
+    Args:
+        client: The OpenAI client configured for either local or OpenAI API interaction.
+        num_messages (int): The total number of message pairs to generate.
+        dest (str): The destination file path for the output CSV.
+        batch_size (int): The number of message pairs to generate in each batch.
+
+    """
     total_generated = 0
     while total_generated < num_messages:
         category = random.choice(CATEGORIES)
         prompt = f"Generate {batch_size} pairs of short instant messages, where each pair contains a non-disrespectful (respectful or neutral) message and a corresponding disrespectful message exemplifying '{category}'."
-        response = client.chat.completions.create(
-            model=LOCAL_MODEL if USING_LOCAL else OPENAI_MODEL,
-            temperature=0.0,
-            messages=[{"role": "user", "content": prompt}],
-            response_model=CategorisedMessages
-        )
-        message_pairs = response.messages
-        # Updated call: removed the `append` argument.
+
+        if use_instructor:
+            # When use_instructor is True, use the instructor response_model to preprocess the messages
+            response = client.chat.completions.create(
+                model=LOCAL_MODEL if USING_LOCAL else OPENAI_MODEL,
+                temperature=0.0,
+                messages=[{"role": "user", "content": prompt}],
+                response_model=CategorisedMessages  # This assumes the response_model can process the response into CategorisedMessages
+            )
+            message_pairs = response.messages
+        else:
+            # When use_instructor is False, extract message_pairs directly from the raw OpenAI response
+            response = client.chat.completions.create(
+                model=LOCAL_MODEL if USING_LOCAL else OPENAI_MODEL,
+                temperature=0.0,
+                messages=[{"role": "user", "content": prompt}]
+            )
+            print(response.json())
+            content = response.choices[0].message.content
+            # Splitting the content by double line breaks to separate each message pair
+            pairs = content.split('\n\n')
+            message_pairs = []
+            for pair in pairs:
+                # Extracting respectful and disrespectful messages using regular expressions
+                matches = re.findall(r'Respectful: "(.*?)"\s*Disrespectful: "(.*?)"', pair, re.DOTALL)
+                if matches:
+                    for respectful, nondisrespectful in matches:
+                        message_pairs.append(MessagePair(respectful=respectful, nondisrespectful=nondisrespectful))
+
+
+
         write_to_csv(dest, message_pairs, category)
         total_generated += len(message_pairs)
-
-
 def write_to_csv(dest, message_pairs, category):
-    # Check if the file exists before opening it.
+    """
+    Writes the generated message pairs to a CSV file.
+
+    Args:
+        dest (str): The destination file path for the output CSV.
+        message_pairs (List[MessagePair]): The list of message pairs to be written.
+        category (str): The category of disrespectfulness for the message pairs.
+
+    Returns:
+        None
+    """
+    # Check if the destination file exists before opening it.
     file_exists = os.path.isfile(dest)
     mode = 'a' if file_exists else 'w'
     
@@ -48,31 +105,34 @@ def write_to_csv(dest, message_pairs, category):
         fieldnames = ['class', 'respectful', 'nondisrespectful']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         
-        # Write the header only if the file did not exist (i.e., we're creating it now).
+        # Write the header only if the file did not exist previously.
         if not file_exists:
             writer.writeheader()
         
         for pair in message_pairs:
             writer.writerow({'class': category, 'respectful': pair.respectful, 'nondisrespectful': pair.nondisrespectful})
 
-
-
 if __name__ == "__main__":
+    # Command-line interface setup for the script.
     parser = argparse.ArgumentParser(description="Generate chat messages with specified negative qualities.")
     parser.add_argument("--num", type=int, default=20, help="Number of message pairs to generate")
     parser.add_argument("--openai", action='store_true', help="Use OpenAI instead of local model")
     parser.add_argument("--dest", type=str, default="messages.csv", help="Destination CSV file for the messages")
+    parser.add_argument("--use-instructor", action='store_true', help="use the instructor library for type checking and response validation (default: False)")
     parser.add_argument("--batch-size", type=int, default=50, help="Number of message pairs per batch (default: 50)")
 
     args = parser.parse_args()
 
+    # Determine whether to use the local API or OpenAI based on command-line arguments.
     USING_LOCAL = not args.openai
+    use_instructor = args.use_instructor
 
+    # Configure the OpenAI client for either local or OpenAI API use.
     client = instructor.patch(OpenAI(
         base_url=LOCAL_API_URL,
         api_key=LOCAL_API_KEY,
     ), mode=instructor.Mode.JSON) if USING_LOCAL else instructor.patch(OpenAI(), mode=instructor.Mode.JSON)
 
-    
-    generate_messages(client, args.num, args.dest, args.batch_size)
+    # Generate the messages and write them to the specified CSV file.
+    generate_messages(client, args.num, args.dest, args.batch_size, use_instructor)
     print(f"Messages written to {args.dest}")
