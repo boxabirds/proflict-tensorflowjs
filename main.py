@@ -7,11 +7,10 @@ import random
 import time
 
 
-USING_LOCAL = True
+USING_LOCAL = False
 CATEGORIES = ["Disrespect", "Dishonesty", "Negativity", "Hostility"]
 LOCAL_API_URL = 'http://gruntus:11434/v1'
 LOCAL_API_KEY = 'ollama'
-#LOCAL_MODEL = 'calebfahlgren/natural-functions:latest'
 LOCAL_MODEL = 'mistral:7b'
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
@@ -25,11 +24,15 @@ if USING_LOCAL:
 else:
     client = instructor.patch(OpenAI(), mode=instructor.Mode.JSON)
 
+class MessagePair(BaseModel):
+    respectful: str
+    disrespectful: str
+
 class CategorisedMessages(BaseModel):
-    messages: list[str]
+    messages: list[MessagePair]
 
 def generate_messages(category, num_messages):
-    prompt = f"Generate {num_messages} short instant messages exemplifying {category.lower()}, each separated by a newline."
+    prompt = f"Generate {num_messages} pairs of short instant messages, where each pair contains a non-disrespectful (respectful or neutral) message and a corresponding disrespectful message exemplifying {category.lower()}. Separate each message within a pair by 'AND', and each pair by a newline."
     start_time = time.time()  # Start timing
     try:
         response = client.chat.completions.create(
@@ -48,7 +51,7 @@ def generate_messages(category, num_messages):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate chat messages with specified negative qualities.")
-    parser.add_argument("--num", type=int, default=20, help="Number of messages to generate (default: 10)")
+    parser.add_argument("--num", type=int, default=20, help="Number of message pairs to generate (default: 10)")
     args = parser.parse_args()
 
     category = random.choice(CATEGORIES)
