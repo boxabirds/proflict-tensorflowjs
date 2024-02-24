@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Message Classifier</title>
+</head>
+<body>
+    <h1>Message Classifier</h1>
+    <input id="message" type="text" placeholder="Enter a message">
+    <button onclick="classifyMessage()">Classify</button>
+    <p id="result"></p>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script>
+        let model;
+        async function loadModel() {
+            model = await tf.loadLayersModel('model_web_deploy/model.json');
+        }
+        loadModel();
+
+        async function classifyMessage() {
+            const messageInput = document.getElementById('message');
+            const resultElement = document.getElementById('result');
+            const prediction = await model.predict(tf.tensor([messageInput.value]));
+            resultElement.innerText = `Prediction: ${prediction.dataSync()[0]}`;
+        }
+    </script>
+</body>
+</html>

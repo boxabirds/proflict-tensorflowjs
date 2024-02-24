@@ -6,8 +6,11 @@ name = "pypi"
 [packages]
 openai = "*"
 objexplore = "*"
+pandas = "*"
 
 [dev-packages]
+tensorboard = "*"
+tensorflowjs = "*"
 
 [requires]
 python_version = "3.11"
