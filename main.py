@@ -67,19 +67,23 @@ def dedupe_messages(messages_file_name:str):
     # Step 4: Save the deduplicated DataFrame to a new CSV file
     deduplicated_df.to_csv(output_filename, index=False)  # This saves the deduplicated DataFrame without the index
 
+
 def create_binary_classification_dataset(messages_file_name:str):
     input_path = Path(messages_file_name)
     df = pd.read_csv(input_path)
 
-    # Initialize an empty DataFrame for the transformed data
-    transformed_df = pd.DataFrame(columns=['is_respectful', 'message'])
+    # Initialize an empty list for the transformed data
+    transformed_data = []
 
     for _, row in df.iterrows():
         # Respectful message (label it as False for 'is_respectful')
-        transformed_df = transformed_df.append({'is_respectful': False, 'message': row['nondisrespectful']}, ignore_index=True)
+        transformed_data.append({'is_respectful': False, 'message': row['nondisrespectful']})
         
         # Disrespectful message (label it as True for 'is_respectful')
-        transformed_df = transformed_df.append({'is_respectful': True, 'message': row['disrespectful']}, ignore_index=True)
+        transformed_data.append({'is_respectful': True, 'message': row['disrespectful']})
+
+    # Create a DataFrame from the transformed data
+    transformed_df = pd.DataFrame(transformed_data, columns=['is_respectful', 'message'])
 
     # Define the output file name based on the source file name
     output_file = input_path.stem + '-binary-classifier' + input_path.suffix
@@ -213,3 +217,7 @@ if __name__ == "__main__":
     print(f"Now deduplicating messages...")
     dedupe_messages(args.dest)
     print(f"Deduplicating messages done.")
+
+    print(f"Now creating the binary classifer dataset…")
+    create_binary_classification_dataset(args.dest)
+    print(f"Binary classifier dataset created.")
