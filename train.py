@@ -33,6 +33,14 @@ y = df['class']
 
 # Split the dataset into training and testing sets
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+# print out the shape of the training and testing sets
+print(f"X_train shape: {X_train.shape}")
+print(f"X_test shape: {X_test.shape}")
+
+# print out the first few elements of the X_train and X_test datasets
+print(f"First few X_train elements: {X_train[:5]}")
+print(f"First few X_test elements: {X_test[:5]}")
+
 
 # Text vectorization parameters
 max_features = 10000  # Size of the vocabulary
@@ -63,7 +71,7 @@ model.compile(optimizer='adam',
 model.fit(X_train, y_train, 
           epochs=10, 
           validation_data=(X_test, y_test),
-          callbacks=[tensorboard_callback]))
+          callbacks=[tensorboard_callback])
 
 model.save('respect')
 

@@ -67,6 +67,28 @@ def dedupe_messages(messages_file_name:str):
     # Step 4: Save the deduplicated DataFrame to a new CSV file
     deduplicated_df.to_csv(output_filename, index=False)  # This saves the deduplicated DataFrame without the index
 
+def create_binary_classification_dataset(messages_file_name:str):
+    input_path = Path(messages_file_name)
+    df = pd.read_csv(input_path)
+
+    # Initialize an empty DataFrame for the transformed data
+    transformed_df = pd.DataFrame(columns=['is_respectful', 'message'])
+
+    for _, row in df.iterrows():
+        # Respectful message (label it as False for 'is_respectful')
+        transformed_df = transformed_df.append({'is_respectful': False, 'message': row['nondisrespectful']}, ignore_index=True)
+        
+        # Disrespectful message (label it as True for 'is_respectful')
+        transformed_df = transformed_df.append({'is_respectful': True, 'message': row['disrespectful']}, ignore_index=True)
+
+    # Define the output file name based on the source file name
+    output_file = input_path.stem + '-binary-classifier' + input_path.suffix
+
+    # Save the transformed data to a new CSV file
+    transformed_df.to_csv(output_file, index=False)
+
+    print(f'Transformed dataset saved to {output_file}')
+
 
 MAX_JSON_PARSE_ATTEMPTS = 4
 def generate_messages(client, num_messages: int, dest: str, batch_size: int, use_instructor: bool = False):

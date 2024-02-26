@@ -7,6 +7,8 @@ name = "pypi"
 openai = "*"
 objexplore = "*"
 pandas = "*"
+scikit-learn = "*"
+tensorflow = "*"
 
 [dev-packages]
 tensorboard = "*"
