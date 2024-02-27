@@ -9,6 +9,7 @@ objexplore = "*"
 pandas = "*"
 scikit-learn = "*"
 tensorflow = "*"
+transformers = "*"
 
 [dev-packages]
 tensorboard = "*"
