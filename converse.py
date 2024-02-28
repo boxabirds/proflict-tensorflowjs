@@ -1,8 +1,11 @@
 import os
 from openai import OpenAI
+import csv
 import argparse
 from typing import List, TypedDict
 from transformers import pipeline
+from sentence_splitter import SentenceSplitter, split_text_into_sentences
+
 class Actor(TypedDict):
     name: str
     sentiment: str
@@ -133,11 +136,14 @@ INSTRUCTION_PROMPT = """
 """
 LOCAL_API_URL = 'http://gruntus:11434/v1'
 LOCAL_API_KEY = 'ollama'
-# LOCAL_MODEL = 'mistral:7b'
-LOCAL_MODEL = 'nous-hermes2:latest'
-# LOCAL_MODEL = 'solar:latest'
-# LOCAL_MODEL = 'llama-pro:latest'
-#LOCAL_MODEL = 'llama2-uncensored:latest'
+LOCAL_MODELS = [
+    "llama2-uncensored:latest",
+    "llama-pro:latest",
+    # "mistral:7b",
+    "nous-hermes2:latest",
+    "openhermes:latest",
+    "stablelm2:latest"
+]
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")  # Fetch the OpenAI API key from environment variables.
 OPENAI_MODEL = "gpt-3.5-turbo"  # Model identifier for OpenAI's API.
 
@@ -146,13 +152,23 @@ parser.add_argument("--openai", action='store_true', help="Use OpenAI instead of
 parser.add_argument("--num", type=int, default=10, help="Number of messages to generate")
 parser.add_argument("--check-sentiment", action='store_true', help="If true this will check the sentiment of the generated messages against expected sentiment")
 parser.add_argument('--sentiment-threshold', type=float, default=0.85, help='Sentiment score threshold for classification')
+parser.add_argument("--output", type=str, default="sentences.csv", help="CSV file to append sentences to")
+
 args = parser.parse_args()
 
+def append_to_csv(file_path, rows):
+    with open(file_path, mode='a', newline='', encoding='utf-8') as file:
+        writer = csv.writer(file)
+        for row in rows:
+            writer.writerow(row)
 
-def generate_conversation(client, scenario: Scenario, num: int, classifier = None, classifier_threshold = 0.85):
+
+def generate_conversation(client, local_model:str, scenario: Scenario, num: int, classifier = None, classifier_threshold = 0.85):
     message_history = []
     max_retries = num * 3  # Maximum retries set to num times 3
     retry_count = 0  # Initialize retry counter
+
+    print(f"\n\n== Generating conversation with '{local_model}' ==")
 
     for i in range(num):
         for actor in scenario:
@@ -164,25 +180,26 @@ def generate_conversation(client, scenario: Scenario, num: int, classifier = Non
 
                 system_prompt_and_message_history = [{"role": "system", "content": prompt}] + message_history
                 response = client.chat.completions.create(
-                    model=LOCAL_MODEL if using_local else OPENAI_MODEL,
-                    temperature=0.7,
-                    frequency_penalty=1.3,
-                    presence_penalty=1.3,
+                    model=local_model if using_local else OPENAI_MODEL,
+                    temperature=0.1,
+                    frequency_penalty=1.1,
+                    presence_penalty=1.1,
                     messages=system_prompt_and_message_history
                 )
 
                 response_content = response.choices[0].message.content
                 if len(response_content) > 0:  # Check if response is not empty
-                    # We're validating the sentiment so check it and skip if it doesn't match expected sentiment
-                    if classifier is not None:
-                        sentiment = classifier(response_content[:511])
-                        external_sentiment = sentiment[0]["label"].lower();
-                        if not external_sentiment == actor["sentiment"].lower():
-                            #print(f"…Skipping response with sentiment {external_sentiment} because it doesn't match expected sentiment {actor['sentiment']}…")
-                            retry_count += 1
-                            if retry_count >= max_retries:
-                                print("Maximum retries reached. Exiting.")
-                                return message_history  # Exit function on reaching maximum retries
+                    # We're checking the sentiment against other models too
+                    # if classifier is not None:
+                    #     # the sentiment classifier can only handle 512 characters
+                    #     sentiment = classifier(response_content[:511])
+                    #     external_sentiment = sentiment[0]["label"].lower();
+                        # if not external_sentiment == actor["sentiment"].lower():
+                        #     #print(f"…Skipping response with sentiment {external_sentiment} because it doesn't match expected sentiment {actor['sentiment']}…")
+                        #     retry_count += 1
+                        #     if retry_count >= max_retries:
+                        #         print("Maximum retries reached. Exiting.")
+                        #         return message_history  # Exit function on reaching maximum retries
                     print(f"Response: \"{response_content}\"\n\n")
                     message_history.append({
                         "role": "user",
@@ -212,18 +229,12 @@ else:
 
 # print out whether we're using local api or openai
 print(f"Using local model: {using_local}")
-# cycle through the array of actor system prompts num times
-# for each iteration, generate a response from the actor system prompt
-# and append it to the message history
-
-# Initialize a counter for consecutive "system\n" responses
 
 classifier = None
 if args.check_sentiment:
     classifier = pipeline("sentiment-analysis")
-    result = classifier("I am happy")
-    print("Sentiment test: {result}")
 
 # iterate through all the actor_system prompts
 for scenario in scenarios:
-    message_history = generate_conversation(client, scenario, args.num, classifier, args.sentiment_threshold )
+    for local_model in LOCAL_MODELS:
+        message_history = generate_conversation(client, local_model, scenario, args.num, classifier, args.sentiment_threshold )

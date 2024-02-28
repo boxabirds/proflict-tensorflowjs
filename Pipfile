@@ -10,6 +10,7 @@ pandas = "*"
 scikit-learn = "*"
 tensorflow = "*"
 transformers = "*"
+sentence-splitter = "*"
 
 [dev-packages]
 tensorboard = "*"
