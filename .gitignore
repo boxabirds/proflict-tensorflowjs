@@ -2,6 +2,9 @@
 # Tensorboard training output
 logs/
 
+# Keep datasets off github for various reasons
+datasets/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
